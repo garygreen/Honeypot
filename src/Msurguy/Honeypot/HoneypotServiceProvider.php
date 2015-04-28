@@ -1,6 +1,5 @@
 <?php namespace Msurguy\Honeypot;
 
-use Illuminate\Html\FormBuilder;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -21,9 +20,14 @@ class HoneypotServiceProvider extends ServiceProvider {
     */
     public function register()
     {
-        $this->app['honeypot'] = $this->app->share(function($app)
+        $this->app->alias('honeypot', 'Msurguy\Honeypot\Honeypot');
+        
+        $this->app->bindShared('honeypot', function($app)
         {
-            return new Honeypot;
+            $honeypot = new Honeypot($app['encrypter']);
+            $honeypot->setNameAttribute(config('honeypot.name_attribute'))
+                     ->setTimeAttribute(config('honeypot.time_attribute'));
+            return $honeypot;
         });
     }
 
@@ -41,6 +45,14 @@ class HoneypotServiceProvider extends ServiceProvider {
         elseif ($this->isLaravelVersion('5'))
         {
             $this->loadTranslationsFrom(__DIR__ . '/../../lang', 'honeypot');
+
+            $honeypotConfig = __DIR__ . '/../../config/honeypot.php';
+
+            $this->mergeConfigFrom($honeypotConfig, 'honeypot');
+
+            $this->publishes([
+               $honeypotConfig => config_path('honeypot.php'),
+            ]);
         }
 
         $this->app->booted(function($app) {
@@ -50,11 +62,23 @@ class HoneypotServiceProvider extends ServiceProvider {
             $translator = $app['translator'];
 
             // Add honeypot and honeytime custom validation rules
-            $validator->extend('honeypot', 'Msurguy\Honeypot\HoneypotValidator@validateHoneypot', $translator->get('honeypot::validation.honeypot'));
-            $validator->extend('honeytime', 'Msurguy\Honeypot\HoneypotValidator@validateHoneytime', $translator->get('honeypot::validation.honeytime'));
+            $validator->extend('honeypot', function($attribute, $value) {
+                return $this->app['honeypot']->validateHoneypot($value);
+            }, $translator->get('honeypot::validation.honeypot'));
+
+            $validator->extend('honeytime', function($attribute, $value, $parameters) {
+                $honeypot = $this->app['honeypot'];
+
+                if (isset($parameters[0]))
+                {
+                    $honeypot->speed($parameters[0]);
+                }
+
+                return $honeypot->validateHoneytime($value);
+            }, $translator->get('honeypot::validation.honeytime'));
 
             // Register the honeypot form macros
-            $this->registerFormMacro($this->isLaravelVersion(['4.0', '4.1']) ? $app['form'] : null);
+            $this->registerFormMacro();
         });
     }
 
@@ -76,21 +100,20 @@ class HoneypotServiceProvider extends ServiceProvider {
     */
     public function registerFormMacro(FormBuilder $form = null)
     {
-        $honeypotMacro = function($honey_name, $honey_time) {
-            $honeypot = new Honeypot();
-            return $honeypot->getFormHTML($honey_name, $honey_time);
+        $honeypotMacro = function() {
+            return app('honeypot')->html();
         };
-
-        // Add a custom honeypot macro to Laravel's form
-        if ($form)
+        
+        if (class_exists('\Illuminate\Html\FormBuilder'))
         {
-            $form->macro('honeypot', $honeypotMacro);
+            \Illuminate\Html\FormBuilder::macro('honeypot', $honeypotMacro);
         }
-        else
+        elseif (class_exists('\Collective\Html\HtmlBuilder'))
         {
-            FormBuilder::macro('honeypot', $honeypotMacro);
+            \Collective\Html\HtmlBuilder::macro('honeypot', $honeypotMacro);
         }
     }
+
 
     /**
      * Determine if laravel starts with any of the given version strings

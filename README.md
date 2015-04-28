@@ -1,4 +1,4 @@
-Honeypot spam prevention for Laravel applications
+Honeypot spam prevention
 =========
 
 ## How does it work? 
@@ -17,15 +17,19 @@ In your terminal type : `composer require msurguy/honeypot` and provide "dev-mas
         }
     }
 
-Next, add this line to 'providers' section of the app config file in `app/config/app.php`:
+**If using with Laravel**
+
+Install the composer dependency as above, then add this line to `providers` array in `app/config/app.php`:
 
     'Msurguy\Honeypot\HoneypotServiceProvider',
 
-At this point the package is installed and you can use it as follows.
+Supported Laravel versions: >= 4.2. For 4.2 and below, use version 0.3.2 of Honeypot.
 
-## Usage :
+## Usage in Laravel
 
-Add the hidden DIV containing honeypot fields to your form by inserting `Form::honeypot` macro like this: 
+### With forms & validation
+
+Add the hidden DIV containing honeypot fields to your form by inserting `Form::honeypot` macro like this:
 
     {{ Form::open('contact') }}
         ...
@@ -33,14 +37,7 @@ Add the hidden DIV containing honeypot fields to your form by inserting `Form::h
         ...
     {{ Form::close() }}
 
-When the page containing `Form::honeypot` macro is rendered, the following HTML markup will be present (my_time field will contain an encrypted timestamp):
-    
-    <div id="my_name_wrap" style="display:none;">
-        <input name="my_name" type="text" value="" id="my_name">
-        <input name="my_time" type="text" value="eyJpdiI6IkxoeWhKc3prN2puZllEajRwZ3lrc0I5bU42bUFWbzF1NEVVOEhxbG9WcFE9IiwidmFsdWUiOiJxNEtBT0NpYW5lUjJvWXp6VE45a1U0V3dNbk9Jd2RUNW42NFpiQWtTRllRPSIsIm1hYyI6IjAyMWQ0NWI1NTVkYTBjZTAxMTdhZmJmNTY0ZDI4Nzg4NzU3ODU4MjM1Y2MxNTVkYjAwNmFhNzBmNTdlNmJmMjkifQ==">
-    </div>
-
-After adding the honeypot fields in the markup with the specified macro add the validation for the honeypot and honeytime fields of the form: 
+Then add the validation rules, matching the `my_name` and `my_time` fields:
 
     $rules = array(
         'email'     => "required|email",
@@ -51,7 +48,29 @@ After adding the honeypot fields in the markup with the specified macro add the 
 
     $validator = Validator::make(Input::get(), $rules);
 
-Please note that "honeytime" takes a parameter specifying number of seconds it should take for the user to fill out the form. If it takes less time than that the form is considered a spam submission.
+Please note that `honeytime` takes a parameter specifying number of seconds it should take for the user to fill out the form. If it takes less time than that the form is considered a spam submission.
+
+## General usage (non-Laravel)
+
+Initialise the honeypot
+
+    $encrypter = new Illuminate\Encryption\Encrypter('my_super_secret_app_key');
+    $honeypot = new Msurguy\Honeypot\Honeypot($encrypter);
+
+In your view output the honeypot html
+
+    <form method="post">
+        ...
+        <?= $honeypot->html('my_name', 'my_time'); ?>
+        ...
+    </form>
+
+Then in your controller validate the honeypot:
+
+    if (!$honeypot->isValid($_POST['my_name'], $_POST['my_time']))
+    {
+        // Honeypot failed, redirect with error?
+    }
 
 That's it! Enjoy getting less spam in your inbox. If you need stronger spam protection, consider using [Akismet](https://github.com/kenmoini/akismet) or [reCaptcha](https://github.com/dontspamagain/recaptcha)   
 
