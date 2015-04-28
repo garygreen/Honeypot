@@ -22,15 +22,29 @@ class HoneypotTest extends \PHPUnit_Framework_TestCase {
     }
 
     /** @test */
+    public function test_get_raw_token()
+    {
+        $this->honeypot->speed(5)->setNameAttribute('honey_name');
+
+        $this->assertEquals($this->honeypot->getRawToken(), ['time' => 10, 'speed' => 5]);
+    }
+
+    /** @test */
     public function test_get_honeypot_form_html()
     {
-        $this->encrypter->shouldReceive('encrypt')->once()->andReturn('ENCRYPTED_TIME');
+        $this->honeypot
+            ->speed(5)
+            ->setNameAttribute('honey_name')
+            ->setTokenAttribute('honey_token');
 
-        $actualHtml = $this->honeypot->html('honey_name', 'honey_time');
+        $this->encrypter->shouldReceive('encrypt')->with(function($token) { return '{"time":1000,"speed":5}'; })->once()->andReturn('55');
+        // $this->encrypter->shouldReceive('encrypt')->once()->andReturn('ENCRYPTED_TOKEN');
+
+        $actualHtml = $this->honeypot->html();
         $expectedHtml = '' .
-            '<div id="honey_name_wrap" style="display:none;">' . "\r\n" .
-                '<input name="honey_name" type="text" value="" id="honey_name"/>' . "\r\n" .
-                '<input name="honey_time" type="text" value="ENCRYPTED_TIME"/>' . "\r\n" .
+            '<div id="honey_name_wrap" style="display:none;">' .
+                '<input name="honey_name" type="text" value="" id="honey_name"/>' .
+                '<input name="honey_token" type="text" value="55"/>' .
             '</div>';
 
         $this->assertEquals($actualHtml, $expectedHtml);
@@ -58,7 +72,7 @@ class HoneypotTest extends \PHPUnit_Framework_TestCase {
     public function it_passes_validation_when_values_are_before_current_time()
     {
         $this->assertTrue(
-            $this->validateHoneyTime(1),
+            $this->validateToken(['time' => 1]),
             'Validate should pass when values are before current time.'
         );
     }
@@ -67,21 +81,26 @@ class HoneypotTest extends \PHPUnit_Framework_TestCase {
     public function it_fails_validation_when_values_are_after_current_time()
     {
         $this->assertFalse(
-            $this->validateHoneyTime(10),
+            $this->validateToken(['time' => 10]),
             'Validate should fail when values are after current time.'
         );
     }
 
     /** @test */
-    public function it_fails_validation_when_value_is_not_numeric()
+    public function it_fails_validation_when_token_is_invalid()
     {
         $this->assertFalse(
-            $this->validateHoneyTime('bar'),
-            'Validate should fail when decrypted value is not numeric.'
+            $this->validateToken(['time' => 'bar']),
+            'Validate should fail when decrypted time value is not numeric.'
+        );
+
+        $this->assertFalse(
+            $this->validateToken(['time' => '']),
+            'Validate should fail when decrypted time value is empty.'
         );
     }
 
-     /** @test */
+    /** @test */
     public function it_can_determine_correct_valid_state()
     {
         $this->encrypter->shouldReceive('decrypt')->with('foo')->andReturn(100);
@@ -98,7 +117,7 @@ class HoneypotTest extends \PHPUnit_Framework_TestCase {
             ->shouldReceive('decrypt')
             ->andThrow(Mockery::mock('Illuminate\Encryption\DecryptException'));
 
-        $this->honeypot->decryptTime('aa');
+        $this->honeypot->decryptToken('aa');
     }
 
     /**
@@ -110,17 +129,17 @@ class HoneypotTest extends \PHPUnit_Framework_TestCase {
         $this->encrypter
             ->shouldReceive('decrypt')
             ->andThrow(new \Exception('blah'));
-        $this->honeypot->decryptTime('aa');
+        $this->honeypot->decryptToken('aa');
     }
 
-    private function validateHoneyTime($time)
+    private function validateToken(array $token)
     {
         $this->encrypter
             ->shouldReceive('decrypt')
             ->with('foo')->once()
-            ->andReturn($time);
+            ->andReturn(json_encode($token));
 
-        return $this->honeypot->speed(5)->validateHoneytime('foo');
+        return $this->honeypot->speed(5)->validateToken('foo');
     }
 
 }

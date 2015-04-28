@@ -29,11 +29,11 @@ class Honeypot {
     protected $nameAttribute = '';
 
     /**
-     * Time attribute
+     * Token attribute
      * 
      * @var string
      */
-    protected $timeAttribute = '';
+    protected $tokenAttribute = '';
 
     /**
      * Start honeypot
@@ -47,20 +47,19 @@ class Honeypot {
 
     /**
      * Get the honey pot form HTML
+     * 
      * @return string
      */
     public function html()
     {
-        // Encrypt the current time
-        $encryptedTime = $this->encrypter->encrypt(time());
-
-        // Get honeypot name and time attributes
+        // Get honeypot name and token details
         $name = $this->getNameAttribute();
-        $time = $this->getTimeAttribute();
+        $tokenAttribute = $this->getTokenAttribute();
+        $token = $this->getToken();
 
-        $html = '<div id="' . $name . '_wrap" style="display:none;">' . "\r\n" .
-                    '<input name="' . $name . '" type="text" value="" id="' . $name . '"/>' . "\r\n" .
-                    '<input name="' . $time . '" type="text" value="' . $encryptedTime . '"/>' . "\r\n" .
+        $html = '<div id="' . $name . '_wrap" style="display:none;">' .
+                    '<input name="' . $name . '" type="text" value="" id="' . $name . '"/>' .
+                    '<input name="' . $tokenAttribute . '" type="text" value="' . $token . '"/>' .
                 '</div>';
 
         return $html;
@@ -77,13 +76,23 @@ class Honeypot {
     }
 
     /**
-     * Get time attribute
+     * Get token attribute
      * 
      * @return string
      */
-    public function getTimeAttribute()
+    public function getTokenAttribute()
     {
-        return $this->timeAttribute;
+        return $this->tokenAttribute;
+    }
+
+    /**
+     * Get speed
+     * 
+     * @return integer
+     */
+    public function getSpeed()
+    {
+        return $this->speed;
     }
 
     /**
@@ -98,14 +107,37 @@ class Honeypot {
     }
 
     /**
-     * Set time attribute
-     * @param string $time
+     * Set token attribute
+     * @param string $token
      * @return $this
      */
-    public function setTimeAttribute($time)
+    public function setTokenAttribute($token)
     {
-        $this->timeAttribute = $time;
+        $this->tokenAttribute = $token;
         return $this;
+    }
+
+    /**
+     * Get raw token
+     * 
+     * @return array
+     */
+    public function getRawToken()
+    {
+        return [
+            'time' => time(),
+            'speed' => $this->getSpeed(),
+        ];
+    }
+
+    /**
+     * Get encrypted token
+     *
+     * @return string
+     */
+    public function getToken()
+    {
+        return $this->encrypter->encrypt(json_encode($this->getRawToken()));
     }
 
     /**
@@ -123,7 +155,7 @@ class Honeypot {
     /**
     * Validate honeypot is empty
     * 
-    * @param  mixed $honeypot
+    * @param  string $honeypot
     * @return boolean
     */
     public function validateHoneypot($honeypot)
@@ -132,42 +164,44 @@ class Honeypot {
     }
 
     /**
-     * Validate honey time was within the time limit
+     * Validate honey token
      * 
-     * @param  mixed $time
+     * @param  string $token
      * @return boolean
      */
-    public function validateHoneytime($time)
+    public function validateToken($token)
     {
-        // Get the decrypted time
-        $time = $this->decryptTime($time);
+        // Decrypt the token
+        $token = $this->decryptToken($token);
 
         // The current time should be greater than the time the form was built + the speed option
-        return ( is_numeric($time) && time() > ($time + $this->speed) );
+        return ( isset($token['time']) && is_numeric($token['time']) && time() > ($token['time'] + $this->speed) );
     }
 
     /**
-     * Determine if honeypot and time is valid
+     * Determine if honeypot and token is valid
      * 
      * @param  string|null  $honeypot
-     * @param  string|null  $time
+     * @param  string|null  $token
      * @return boolean
      */
-    public function isValid($honeypot = null, $time = null)
+    public function isValid($honeypot = null, $token = null)
     {
-        return $this->validateHoneypot($honeypot) && $this->validateHoneytime($time);
+        return $this->validateHoneypot($honeypot) && $this->validateToken($token);
     }
 
     /**
-     * Decrypt the given time
+     * Decrypt the given token
      * 
      * @param  mixed $time
-     * @return string|null
+     * @return array|null
      */
-    public function decryptTime($time)
+    public function decryptToken($token)
     {
+        if (!is_string($token)) return null;
+
         try {
-            return $this->encrypter->decrypt($time);
+            return json_decode($this->encrypter->decrypt($token), true);
         }
         catch (Exception $e)
         {

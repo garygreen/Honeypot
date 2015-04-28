@@ -1,7 +1,6 @@
 <?php namespace Msurguy\Honeypot;
 
 use Closure, Validator;
-use Illuminate\Translation\Translator;
 
 class HoneypotMiddleware {
 
@@ -32,12 +31,10 @@ class HoneypotMiddleware {
      */
     public function handle($request, Closure $next)
     {
-        $nameAttribute = $this->honeypot->getNameAttribute();
-        $timeAttribute = $this->honeypot->getTimeAttribute();
+        $tokenAttribute = $this->honeypot->getTokenAttribute();
 
-        $validator = Validator::make($request->only([$nameAttribute, $timeAttribute]), [
-            $nameAttribute => 'honeypot',
-            $timeAttribute => 'required|honeytime'
+        $validator = Validator::make($request->get($tokenAttribute), [
+            $tokenAttribute => 'honeypot'
         ]);
 
         if ($validator->fails())
